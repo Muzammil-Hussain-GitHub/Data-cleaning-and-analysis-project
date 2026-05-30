@@ -1,0 +1,206 @@
+SELECT * FROM used_carsinfo ;
+SELECT * FROM sellers_data ; 
+
+SELECT COUNT(*) FROM used_carsinfo ;
+
+SELECT Make, Model, Year, Transmission, `Condition`, Price_PKR 
+FROM used_carsinfo ;
+
+select distinct city from used_carsinfo ; 
+
+select * from used_carsinfo where year >= 2020 ;
+
+select * from used_carsinfo  where price_pkr between 2000000 and 4000000  ; 
+
+select * from used_carsinfo where city in ("karachi", "lahore") ;
+
+select * from used_carsinfo order by price_pkr desc limit 10 ;
+
+select * from used_carsinfo 
+where mileage_km < 50000 and `condition` = 'excellent' ;
+
+select avg(price_pkr ) as AVG_PRICE	from used_carsinfo ; 
+
+select make, avg(price_pkr ) as AVG_PRICE
+from used_carsinfo 
+group by MAKE 
+order by AVG_PRICE DESC ; 
+
+select fuel_type , count(*) as number_of_cars
+from used_carsinfo
+group by fuel_type
+order by number_of_cars ;
+
+
+select city , count(*) as number_of_cars
+from used_carsinfo
+group by city 
+order by number_of_cars ;
+
+
+select make, count(*) as number_of_cars
+from used_carsinfo
+group by make 
+having number_of_cars 
+order by number_of_cars ;
+
+#joins 
+
+select 
+ c.make ,  c.model, c.year , c.price_pkr , 
+ s.seller_name , s.seller_type 
+ from used_carsinfo as c
+ join sellers_data s on c.seller_id = s.seller_id ;
+
+
+
+
+#How many cars does each seller have?
+#What is the average price of their cars?
+#Which years are their cars?
+
+SELECT 
+    s.seller_name,
+    s.seller_type,
+    COUNT(c.car_id) AS number_of_cars,
+    MIN(c.year) AS oldest_car_year,
+    MAX(c.price_pkr) AS highest_price
+FROM used_carsinfo AS c
+JOIN sellers_data AS s ON c.seller_id = s.seller_id
+GROUP BY s.seller_id, s.seller_name, s.seller_type;
+
+ 
+ 
+ #How many cars of each model each seller sells
+ 
+SELECT 
+    s.seller_name,
+    c.model,
+    COUNT(*) AS number_of_cars
+FROM used_carsinfo c
+JOIN sellers_data s ON c.seller_id = s.seller_id
+GROUP BY s.seller_id, s.seller_name, c.model
+ORDER BY s.seller_name, number_of_cars DESC;
+
+#  per seller and per car make (manufacturer) how many cars they sold, and also how many different models within that make.
+SELECT 
+    s.seller_name,
+    c.make,
+    COUNT(*) AS total_cars_sold
+FROM used_carsinfo c
+JOIN sellers_data s ON c.seller_id = s.seller_id
+GROUP BY s.seller_id, s.seller_name, c.make
+ORDER BY s.seller_name, c.make;
+
+# How many models were sold by each car company and the corresponding models
+SELECT 
+    c.make,
+    c.model,
+    COUNT(*) AS total_sold
+FROM used_carsinfo c
+GROUP BY c.make, c.model
+ORDER BY total_sold DESC;
+
+ #How many distinct models exist for each car make (e.g., Honda has 3 models)
+ SELECT 
+    c.make,
+    COUNT(DISTINCT c.model) AS number_of_distinct_models
+FROM used_carsinfo c
+GROUP BY c.make
+ORDER BY number_of_distinct_models DESC;
+  
+#all cars listed by sellers above 4.5
+  
+select  
+ c.make,c.model,c.price_pkr,c.city,
+ s.seller_name,s.rating 
+ from used_carsinfo c
+ join sellers_data s on c.seller_id =s.seller_id
+ where s.rating >  4.5
+ order by s.rating desc ; 
+ 
+ #Sellers who have NO cars in the cars table 
+ 
+ SELECT s.Seller_Name, s.Seller_Type
+FROM sellers_data s
+LEFT JOIN used_carsinfo c ON s.Seller_ID = c.Seller_ID
+WHERE c.Seller_ID IS NULL;
+  
+  
+# Add a column that labels price as High, Mid or Low
+SELECT 
+    Make, Model, Price_PKR,
+    CASE 
+        WHEN Price_PKR >= 4000000 THEN 'High'
+        WHEN Price_PKR BETWEEN 2000000 AND 3999999 THEN 'Mid'
+        ELSE 'Low'
+    END AS Price_Category
+FROM used_carsinfo ;  
+
+#to permanently add a column you use this command
+
+ALTER TABLE used_carsinfo
+ADD COLUMN Price_Category VARCHAR(10);
+
+-- 1. Disable Safe Update Mode for this session
+SET SQL_SAFE_UPDATES = 0;
+
+-- 2. Run your UPDATE command (this will now work)
+UPDATE used_carsinfo
+SET Price_Category = 
+    CASE 
+        WHEN Price_PKR >= 4000000 THEN 'High'
+        WHEN Price_PKR BETWEEN 2000000 AND 3999999 THEN 'Mid'
+        ELSE 'Low'
+    END;
+
+-- 3. Re-enable Safe Update Mode to protect yourself in the future
+SET SQL_SAFE_UPDATES = 1;
+
+select * from used_carsinfo ; 
+
+# Rank cars by price within each Make using window function
+
+SELECT 
+    Make, Model, Price_PKR,
+    RANK() OVER (PARTITION BY Make ORDER BY Price_PKR DESC) AS Price_Rank
+FROM used_carsinfo ;
+
+
+# to get the top 3 cars per brand 
+WITH Top3PerBrand AS (
+    SELECT 
+        Make,
+        Model,
+        Price_PKR,
+        ROW_NUMBER() OVER (PARTITION BY Make ORDER BY Price_PKR DESC) AS rn
+    FROM used_carsinfo   -- ✅ correct table name
+)
+SELECT Make, Model, Price_PKR, rn AS Price_Rank
+FROM Top3PerBrand
+WHERE rn <= 3
+ORDER BY Make, Price_PKR DESC;
+
+#incase we want the name of the seller and thier id too 
+ 
+ WITH Top3PerBrand AS (
+    SELECT 
+        c.Make,
+        c.Model,
+        c.Price_PKR,
+        s.seller_id,
+        s.seller_name,          -- use the exact column name from seller_data
+        ROW_NUMBER() OVER (PARTITION BY c.Make ORDER BY c.Price_PKR DESC) AS rn
+    FROM used_carsinfo c
+    JOIN sellers_data s ON c.seller_id = s.seller_id
+)
+SELECT 
+    Make,
+    Model,
+    Price_PKR,
+    seller_id,
+    seller_name,
+    rn AS Price_Rank
+FROM Top3PerBrand
+WHERE rn <= 3
+ORDER BY Make, Price_PKR DESC;
